@@ -1,0 +1,5 @@
+Q4 
+To identify a bug on this application I would first check if I can manually find a valid result with the current implementation of the algorithm.
+If it does works, I will check if dma tranfers are well configured by analyzing one specific data block.
+Using GDB, I would follow one data block from L2 memory (since its the first location where I can access to camera data) to L1 input buffer to L1 output buffer, then L2 then L3. Then, If it shows any error, I would verify still wih GDB if DMA transfers addresses are well update from one transfer to another to verify if there isn't an overwriting problem.
+Then, I will record some data concerning task execution (id, timestamp) while a picture is captured and processed to verify if tasks are correctively sequenced.
