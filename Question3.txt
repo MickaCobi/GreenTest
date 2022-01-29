@@ -1,0 +1,40 @@
+Image information
+-------------------
+The camera produce a grayscale VGA image. It means 256 possible gray scales per pixel and a resolution of 640 per 480 pixels.
+An image size is then 640 * 480 * 1 byte (to code 256 grayscales) = 307200 bytes. (640 bytes per line)
+
+Camera to L2 memory transfer
+----------------------------
+L2 memory is limited to 128kBytes, it represents 42% of one image so the micro DMA will be configured to transfer it in several time. As the cluster DMA empties L2 buffer to transfer it to L1 memory area, the end of the clusterDMA transfer will awake a microDMA transfer that will bring a new data from the camera.
+In order to run the demonstration in a continuous way, L2 memory needs to be splitted into two areas. One to store data coming from the camera and another one to receive data from L1 memory and send it to the external memory L3. microDMA transfer size will be adjusted according to this constraint: The amount of data that can be transfered at a time will be 64kBytes. 
+
+L2 to L1 transfers
+-------------------
+L2 needs to provide image data to L1 so that it can be processed by the algorithm. 
+The available memory in L1 area is 40kBytes.
+It can store up to 62 input lines at a time but some memory must be available to store the output of the algorithm. 
+Let's say half the memory is dedicated to the input buffer and the other half to the output buffer.
+
+Core 0 will initiate clusterDMA transfer to bring input data from L2 memory to L1 memory. At the end of the transfer, a task can be awakened on an available core that will process the input buffer with the algorithm. In another way, a core can process a part of it if the algorithm is time consuming, then we can use several slave Core to process simultaneously the input buffer. Once the output buffer filled (or partially filled by one core), a new cluster DMA transfer can be triggered to send back the output buffer to L2 memory area.
+
+Commands for the cluster-DMA unit are extremely short. Reconfiguring cluster DMA transfer source and destination addresses each time a new core finish to process an input buffer seems to be a good way to minimize execution time. Then, L1 shared memory will be splitted in 16 areas, one input buffer location and one output buffer location per core.
+
+L2 to L3
+---------
+Receiving a certain amount of processed data from L1 memory can trigger a task that will trigger a microDMA transfer that will put this memory into the external memory area L3. 
+
+
+Key points: 
+-----------
+- An image is processed in several iterations of the algorithm. 
+- L2 memory is splitted in half to handle on one side: data reception from the camera and on the other side processed data reception from L1 that is then sent to external memory. 
+- L2 raw data is transfered by packages via cluster DMA to be processed at the same time by the 8 cores. 
+- The algorithm coded in L1 shared memory is available from each core. 
+- The end of a cluster DMA transfer from L2 to L1 awake a task in available core to process the input data.
+- The end of a process trigger a new cluster DMA transfer to send back process data from L1 to L2.
+- The end of a cluster DMA transfer from L1 to L2 awake a tasks that trigger a microDMA transfer from L2 to L3. 
+- The external memory contains the processed image.
+
+Note: 
+----- 
+"The camera driver can transfer data from camera to L2, using up to 2 buffers to not miss any data, and with no size limit" is not very clear. Maybe a custom CRC step between the two buffers is needed here to verify if all data are valid ? In my opinion, this will cause an important delay.  
