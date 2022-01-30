@@ -14,6 +14,15 @@ static int errors = 0;
 static struct pi_cluster_task addTask;		// task dedicated to add the two matrix
 static struct pi_cluster_task multTask;		// task dedicated to multiply the two matrix
 
+typedef struct dma_memcpy_s
+{
+    unsigned short *src;
+    unsigned short *dst;
+    uint32_t size;
+    pi_dmacpy_dir_e dir;
+    pi_task_t *task;
+    struct dma_memcpy_s *next;
+} dma_memcpy_t;
 
 static void __L2_FCL1_copy_end(void* arg)
 {
@@ -91,16 +100,16 @@ void mainController(void)
     	printf("Matrix1 allocated in FC L1 at address %p\n", p_mat1_fc_l1_buf);
     }
 
-    // Matrix two allocation in L2
-	p_mat2_cl_l2_buf = (unsigned short*)pi_fc_l1_malloc(MATRIX_SIZE);
-    if(p_mat2_cl_l2_buf == NULL)
+    // Matrix two allocation in FC L1
+	p_mat2_fc_l1_buf = (unsigned short*)pi_fc_l1_malloc(MATRIX_SIZE);
+    if(p_mat2_fc_l1_buf == NULL)
     {
         printf("Failed to allocate Matrix2 in CL L1!\n");
         pmsis_exit(-1);
     }
     else
     {
-    	printf("Matrix2 allocated in FC L1 at address %p\n", p_mat2_cl_l2_buf);
+    	printf("Matrix2 allocated in FC L1 at address %p\n", p_mat2_fc_l1_buf);
     }
 
     // FILL L2 MEMORY 
@@ -110,7 +119,7 @@ void mainController(void)
     	p_mat1_l2_buf[id] = 2;
     	p_mat2_l2_buf[id] = 3;
     	p_mat1_fc_l1_buf[id] = 0;
-    	p_mat2_fc_l2_buf[id] = 0;
+    	p_mat2_fc_l1_buf[id] = 0;
     }
 
     // CONFIGURE DMA TRANSFERS
@@ -130,19 +139,19 @@ void mainController(void)
     dma_copy_mat1_l2_fcl1.size 	= MATRIX_SIZE * sizeof(unsigned short);
     dma_copy_mat1_l2_fcl1.dir 	= PI_DMACPY_L2_FC_L1; 
     dma_copy_mat1_l2_fcl1.task 	= &task_copy_mat1_l2_fcl1;
-    dma_copy_mat1_l2_fcl1.next 	= &task_copy_mat2_l2_fcl1;
+    dma_copy_mat1_l2_fcl1.next 	= &dma_copy_mat2_l2_fcl1;
 
     // Transfer 2 : Matrix 2 from L2 to FC L1
     dma_copy_mat1_l2_fcl1.src 	= p_mat1_l2_buf;
     dma_copy_mat1_l2_fcl1.dst 	= p_mat1_fc_l1_buf;
     dma_copy_mat1_l2_fcl1.size 	= MATRIX_SIZE * sizeof(unsigned short);
     dma_copy_mat1_l2_fcl1.dir 	= PI_DMACPY_L2_FC_L1; 
-    dma_copy_mat1_l2_fcl1.task 	= &task_copy_mat1_l2_fcl1;
+    dma_copy_mat1_l2_fcl1.task 	= &task_copy_mat2_l2_fcl1;
     dma_copy_mat1_l2_fcl1.next 	= NULL; 
 
     // Configure callbacks 
     // Calling "__L2_FCL1_copy_end" function when all matrix has been copied to FC L1 memory.
-    pi_task_callback(&task_copy_mat1_l2_fcl1, __L2_FCL1_copy_end, &arg);
+    pi_task_callback(&task_copy_mat1_l2_fcl1, __L2_FCL1_copy_end, &task_copy_mat2_l2_fcl1);
 
 
 
@@ -150,7 +159,7 @@ void mainController(void)
     // Starting DMA Transfer
     errors = pi_dmacpy_copy_async(&device, (void *)p_mat1_l2_buf, (void *)p_mat1_fc_l1_buf,
                                   (MATRIX_SIZE * sizeof(unsigned short)), PI_DMACPY_L2_FC_L1,
-                                  &task_copy);
+                                  &task_copy_mat1_l2_fcl1);
     if(errors)
     {
         printf("Copy from %p to %p failed : %ld\n", p_mat1_l2_buf, p_mat1_fc_l1_buf, errors);
