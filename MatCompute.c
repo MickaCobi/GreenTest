@@ -1,8 +1,8 @@
 /* PMSIS includes */
 #include "pmsis.h"
 
-#define MATRIX_WIDTH    (2)
-#define MATRIX_HEIGHT   (2)
+#define MATRIX_WIDTH    (64)
+#define MATRIX_HEIGHT   (64)
 #define MATRIX_SIZE     (MATRIX_WIDTH * MATRIX_HEIGHT)
 
 struct cl_args_s
