@@ -9,8 +9,11 @@ static unsigned short *p_mat1_l2_buf; 		// Matrix1 Buffer pointer in L2 memory
 static unsigned short *p_mat2_l2_buf; 		// Matrix2 Buffer pointer in L2 memory
 static unsigned short *p_mat1_fc_l1_buf; 	// Matrix1 Buffer pointer in FC L1 memory
 static unsigned short *p_mat2_fc_l1_buf; 	// Matrix2 Buffer pointer in FC L1 memory
-static struct pi_device dmacpy;
+static struct pi_device device;
 static int errors = 0;
+static struct pi_cluster_task addTask;		// task dedicated to add the two matrix
+static struct pi_cluster_task multTask;		// task dedicated to multiply the two matrix
+
 
 static void __L2_FCL1_copy_end(void* arg)
 {
@@ -22,7 +25,7 @@ static void __L2_FCL1_copy_end(void* arg)
     	pi_task_callback(next->task, __L2_FCL1_copy_end, copy->next);
 
     	// Initiate next transfer
-        errors = pi_dmacpy_copy_async(&dmacpy, (void *) next->src, (void *) next->dst,
+        errors = pi_dmacpy_copy_async(&device, (void *) next->src, (void *) next->dst,
                                       next->size, next->dir, next->task);
         if(errors)
         {
@@ -36,6 +39,7 @@ static void __L2_FCL1_copy_end(void* arg)
     else // Here, matrix transfer from L2 to FC L1 is finished
     {
     	// Proceed to calculation
+    	//pi_cluster_send_task_to_cl(&device, pi_cluster_task(&addTask, addMatrix, NULL));
     }
 }
 
@@ -47,6 +51,7 @@ void mainController(void)
     pi_task_t task_copy_mat2_l2_fcl1; 	// Task dedicated to copying Matrix2 from L2 to L1	
 	dma_memcpy_t dma_copy_mat1_l2_fcl1;	// DMA transfer about Matrix1 from L2 to L1
 	dma_memcpy_t dma_copy_mat2_l2_fcl1; // DMA transfer about Matrix2 from L2 to L1
+
 
 	// Memory allocation
 
@@ -111,11 +116,11 @@ void mainController(void)
     // CONFIGURE DMA TRANSFERS
 
     pi_dmacpy_conf_init(&dmacpy_conf);
-    pi_open_from_conf(&dmacpy, &dmacpy_conf);
-    errors = pi_dmacpy_open(&dmacpy);
+    pi_open_from_conf(&device, &dmacpy_conf);
+    errors = pi_dmacpy_open(&device);
     if (errors)
     {
-        printf("Error dmacpy open : %ld !\n", errors);
+        printf("Error device open : %ld !\n", errors);
         pmsis_exit(-3);
     }
 
@@ -140,7 +145,10 @@ void mainController(void)
     pi_task_callback(&task_copy_mat1_l2_fcl1, __L2_FCL1_copy_end, &arg);
 
 
-    errors = pi_dmacpy_copy_async(&dmacpy, (void *)p_mat1_l2_buf, (void *)p_mat1_fc_l1_buf,
+
+
+    // Starting DMA Transfer
+    errors = pi_dmacpy_copy_async(&device, (void *)p_mat1_l2_buf, (void *)p_mat1_fc_l1_buf,
                                   (MATRIX_SIZE * sizeof(unsigned short)), PI_DMACPY_L2_FC_L1,
                                   &task_copy);
     if(errors)
